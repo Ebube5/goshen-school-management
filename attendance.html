@@ -8,12 +8,11 @@
 <style>
 * {
     box-sizing: border-box;
-    margin: 0;
-    padding: 0;
     font-family: Arial, sans-serif;
 }
 
 body {
+    margin: 0;
     background: #f4f6f9;
     color: #263445;
 }
@@ -25,7 +24,7 @@ header {
 }
 
 header h2 {
-    margin-bottom: 15px;
+    margin: 0 0 15px;
 }
 
 nav {
@@ -41,12 +40,8 @@ nav a {
 
 .container {
     max-width: 1100px;
-    margin: 30px auto;
+    margin: 25px auto;
     padding: 15px;
-}
-
-h2 {
-    margin-bottom: 20px;
 }
 
 .card {
@@ -54,7 +49,6 @@ h2 {
     padding: 20px;
     border-radius: 8px;
     margin-bottom: 20px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.04);
 }
 
 .stats {
@@ -70,9 +64,8 @@ h2 {
 }
 
 .stat p {
-    font-size: 25px;
+    font-size: 26px;
     font-weight: bold;
-    margin-top: 8px;
 }
 
 input, select, button {
@@ -91,26 +84,378 @@ button {
     cursor: pointer;
 }
 
-button:hover {
-    opacity: 0.9;
-}
-
 .table-wrap {
     overflow-x: auto;
 }
 
 table {
     width: 100%;
+    min-width: 550px;
     border-collapse: collapse;
-    min-width: 600px;
     margin-top: 15px;
 }
 
 th, td {
-    padding: 13px;
-    text-align: left;
+    padding: 12px;
     border-bottom: 1px solid #e5e7eb;
+    text-align: left;
 }
 
 th {
-    background
+    background: #edf1f6;
+}
+
+.status-button {
+    width: auto;
+    padding: 8px 14px;
+}
+
+.present {
+    background: #15803d;
+}
+
+.absent {
+    background: #b42318;
+}
+
+.empty {
+    text-align: center;
+    color: #64748b;
+    padding: 20px;
+}
+
+@media(max-width: 600px) {
+    .stats {
+        grid-template-columns: 1fr;
+    }
+}
+</style>
+</head>
+
+<body>
+
+<header>
+    <h2>Goshen School Management</h2>
+
+    <nav>
+        <a href="index.html">Dashboard</a>
+        <a href="students.html">Students</a>
+        <a href="teachers.html">Teachers</a>
+        <a href="classes.html">Classes</a>
+        <a href="attendance.html">Attendance</a>
+    </nav>
+</header>
+
+<main class="container">
+
+    <h2>Attendance Management</h2>
+
+    <div class="card stats">
+        <div class="stat">
+            <h3>Total Students</h3>
+            <p id="totalStudents">0</p>
+        </div>
+
+        <div class="stat">
+            <h3>Present</h3>
+            <p id="presentCount">0</p>
+        </div>
+
+        <div class="stat">
+            <h3>Absent</h3>
+            <p id="absentCount">0</p>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>Select Class and Date</h3>
+
+        <select id="classSelect">
+            <option value="">Select Class</option>
+        </select>
+
+        <input type="date" id="attendanceDate">
+
+        <button id="loadButton">Load Students</button>
+    </div>
+
+    <div class="card">
+        <h3>Student Attendance</h3>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Student Name</th>
+                        <th>Admission Number</th>
+                        <th>Status</th>
+                    </tr>
+                </thead>
+
+                <tbody id="attendanceList">
+                    <tr>
+                        <td colspan="3" class="empty">
+                            Select a class and date.
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+
+        <button id="saveButton">Save Attendance</button>
+    </div>
+
+    <div class="card">
+        <h3>Attendance History</h3>
+
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Class</th>
+                        <th>Present</th>
+                        <th>Absent</th>
+                    </tr>
+                </thead>
+
+                <tbody id="historyList"></tbody>
+            </table>
+        </div>
+    </div>
+
+</main>
+
+<script>
+const getData = key => {
+    try {
+        return JSON.parse(localStorage.getItem(key) || "[]");
+    } catch {
+        return [];
+    }
+};
+
+let students = getData("goshenStudents");
+let classes = getData("goshenClasses");
+let attendance = getData("goshenAttendance");
+
+let currentRecords = [];
+
+const classSelect = document.getElementById("classSelect");
+const dateInput = document.getElementById("attendanceDate");
+
+function normalize(value) {
+    return String(value || "")
+        .toLowerCase()
+        .replace(/\s+/g, "")
+        .trim();
+}
+
+function getClassName(student) {
+    return student.className || student.class || "";
+}
+
+function getAdmission(student) {
+    return student.admission ||
+           student.admissionNumber ||
+           student.id || "";
+}
+
+function loadClasses() {
+    classes.forEach(item => {
+        const option = document.createElement("option");
+        option.value = item.name;
+        option.textContent = item.name;
+        classSelect.appendChild(option);
+    });
+}
+
+function loadStudents() {
+    const selectedClass = classSelect.value;
+    const selectedDate = dateInput.value;
+
+    if (!selectedClass || !selectedDate) {
+        alert("Please select a class and date.");
+        return;
+    }
+
+    const classStudents = students.filter(student =>
+        normalize(getClassName(student)) === normalize(selectedClass)
+    );
+
+    if (classStudents.length === 0) {
+        currentRecords = [];
+        displayAttendance();
+
+        alert("No students found in this class. Check that students have been assigned to this class.");
+        return;
+    }
+
+    const oldRecord = attendance.find(record =>
+        record.className === selectedClass &&
+        record.date === selectedDate
+    );
+
+    currentRecords = classStudents.map(student => {
+        const admission = getAdmission(student);
+
+        const saved = oldRecord?.records?.find(item =>
+            item.admission === admission
+        );
+
+        return {
+            name: student.name || "Unnamed Student",
+            admission: admission,
+            status: saved ? saved.status : "Present"
+        };
+    });
+
+    displayAttendance();
+}
+
+function displayAttendance() {
+    const list = document.getElementById("attendanceList");
+    list.innerHTML = "";
+
+    currentRecords.forEach((student, index) => {
+        const row = document.createElement("tr");
+
+        const name = document.createElement("td");
+        name.textContent = student.name;
+
+        const admission = document.createElement("td");
+        admission.textContent = student.admission || "Not assigned";
+
+        const statusCell = document.createElement("td");
+        const button = document.createElement("button");
+
+        button.className = "status-button " +
+            (student.status === "Present" ? "present" : "absent");
+
+        button.textContent = student.status;
+
+        button.onclick = () => {
+            currentRecords[index].status =
+                currentRecords[index].status === "Present"
+                ? "Absent"
+                : "Present";
+
+            displayAttendance();
+        };
+
+        statusCell.appendChild(button);
+        row.append(name, admission, statusCell);
+        list.appendChild(row);
+    });
+
+    updateStats();
+}
+
+function updateStats() {
+    const present = currentRecords.filter(
+        item => item.status === "Present"
+    ).length;
+
+    const absent = currentRecords.filter(
+        item => item.status === "Absent"
+    ).length;
+
+    document.getElementById("totalStudents").textContent =
+        currentRecords.length;
+
+    document.getElementById("presentCount").textContent = present;
+    document.getElementById("absentCount").textContent = absent;
+}
+
+function saveAttendance() {
+    if (!currentRecords.length) {
+        alert("Load students before saving attendance.");
+        return;
+    }
+
+    const selectedClass = classSelect.value;
+    const selectedDate = dateInput.value;
+
+    const record = {
+        className: selectedClass,
+        date: selectedDate,
+        records: currentRecords
+    };
+
+    const existingIndex = attendance.findIndex(item =>
+        item.className === selectedClass &&
+        item.date === selectedDate
+    );
+
+    if (existingIndex >= 0) {
+        attendance[existingIndex] = record;
+    } else {
+        attendance.push(record);
+    }
+
+    localStorage.setItem(
+        "goshenAttendance",
+        JSON.stringify(attendance)
+    );
+
+    alert("Attendance saved successfully!");
+
+    displayHistory();
+}
+
+function displayHistory() {
+    const list = document.getElementById("historyList");
+    list.innerHTML = "";
+
+    if (!attendance.length) {
+        list.innerHTML = `
+            <tr>
+                <td colspan="4" class="empty">
+                    No attendance records yet.
+                </td>
+            </tr>`;
+        return;
+    }
+
+    attendance.forEach(record => {
+        const present = record.records.filter(
+            item => item.status === "Present"
+        ).length;
+
+        const absent = record.records.filter(
+            item => item.status === "Absent"
+        ).length;
+
+        const row = document.createElement("tr");
+
+        [
+            record.date,
+            record.className,
+            present,
+            absent
+        ].forEach(value => {
+            const cell = document.createElement("td");
+            cell.textContent = value;
+            row.appendChild(cell);
+        });
+
+        list.appendChild(row);
+    });
+}
+
+document.getElementById("loadButton")
+    .addEventListener("click", loadStudents);
+
+document.getElementById("saveButton")
+    .addEventListener("click", saveAttendance);
+
+dateInput.value = new Date().toLocaleDateString("en-CA");
+
+loadClasses();
+displayHistory();
+updateStats();
+
+</script>
+
+</body>
+            </html>
