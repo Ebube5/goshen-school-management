@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Results Management - Goshen SMS</title>
+
+<link rel="stylesheet" href="style.css">
+
+<style>
+body { font-family: Arial, sans-serif; background:#f4f6fa; margin:0; padding:20px; }
+.container { max-width:1000px; margin:auto; }
+.card { background:white; padding:20px; border-radius:10px; margin-bottom:20px; }
+h2 { color:#172554; }
+input, select, button {
+width:100%; padding:12px; margin:8px 0;
+box-sizing:border-box; border:1px solid #ddd; border-radius:6px;
+}
+button { background:#172554; color:white; border:0; cursor:pointer; }
+button:hover { opacity:.9; }
+table { width:100%; border-collapse:collapse; background:white; }
+th, td { padding:12px; border-bottom:1px solid #eee; text-align:left; }
+th { background:#172554; color:white; }
+.delete { background:#dc2626; }
+.back { display:inline-block; margin-bottom:15px; color:#172554; }
+@media(max-width:600px) {
+.table-wrap { overflow-x:auto; }
+table { min-width:650px; }
+}
+</style>
+</head>
+
+<body>
+<div class="container">
+
+<a class="back" href="index.html">← Back to Dashboard</a>
+
+<h2>Results Management</h2>
+<p>Enter and manage students' academic results.</p>
+
+<div class="card">
+<h3>Enter Student Result</h3>
+
+<label>Class</label>
+<select id="classSelect">
+<option value="">Select Class</option>
+</select>
+
+<label>Student</label>
+<select id="studentSelect">
+<option value="">Select Student</option>
+</select>
+
+<label>Subject</label>
+<input id="subject" type="text" placeholder="e.g. Mathematics">
+
+<label>CA Score (Maximum 40)</label>
+<input id="ca" type="number" min="0" max="40" placeholder="Enter CA score">
+
+<label>Exam Score (Maximum 60)</label>
+<input id="exam" type="number" min="0" max="60" placeholder="Enter examination score">
+
+<button onclick="saveResult()">Save Result</button>
+<p id="message"></p>
+</div>
+
+<div class="card">
+<h3>Saved Results</h3>
+
+<label>Filter by Class</label>
+<select id="filterClass" onchange="displayResults()">
+<option value="">All Classes</option>
+</select>
+
+<div class="table-wrap">
+<table>
+<thead>
+<tr>
+<th>Student</th>
+<th>Class</th>
+<th>Subject</th>
+<th>CA</th>
+<th>Exam</th>
+<th>Total</th>
+<th>Grade</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody id="resultsTable"></tbody>
+</table>
+</div>
+</div>
+
+</div>
+
+<script>
+const students = JSON.parse(localStorage.getItem("goshenStudents") || "[]");
+const classes = JSON.parse(localStorage.getItem("goshenClasses") || "[]");
+
+let results = JSON.parse(localStorage.getItem("goshenResults") || "[]");
+
+const classSelect = document.getElementById("classSelect");
+const studentSelect = document.getElementById("studentSelect");
+const filterClass = document.getElementById("filterClass");
+
+function normalize(value) {
+return String(value || "").toLowerCase().replace(/\s+/g, "");
+}
+
+function getStudentClass(student) {
+return student.className || student.class || "";
+}
+
+function getGrade(total) {
+if (total >= 70) return "A";
+if (total >= 60) return "B";
+if (total >= 50) return "C";
+if (total >= 45) return "D";
+if (total >= 40) return "E";
+return "F";
+}
+
+function loadClasses() {
+const names = [...new Set([
+...classes.map(c => c.name),
+...students.map(s => getStudentClass(s))
+].filter(Boolean))];
+
+names.forEach(name => {
+classSelect.add(new Option(name, name));
+filterClass.add(new Option(name, name));
+});
+}
+
+function loadStudents() {
+const selectedClass = classSelect.value;
+
+studentSelect.innerHTML = '<option value="">Select Student</option>';
+
+students
+.filter(student => normalize(getStudentClass(student)) === normalize(selectedClass))
+.forEach(student => {
+const admission = student.admission || student.admissionNumber || student.id || "";
+const option = new Option(student.name, admission);
+option.dataset.name = student.name;
+studentSelect.add(option);
+});
+}
+
+function saveResult() {
+const selectedStudent = studentSelect.options[studentSelect.selectedIndex];
+const className = classSelect.value;
+const subject = document.getElementById("subject").value.trim();
+const ca = Number(document.getElementById("ca").value);
+const exam = Number(document.getElementById("exam").value);
+
+if (!className || !studentSelect.value || !subject ||
+document.getElementById("ca").value === "" ||
+document.getElementById("exam").value === "") {
+alert("Please complete all fields.");
+return;
+}
+
+if (ca < 0 || ca > 40 || exam < 0 || exam > 60) {
+alert("CA must be between 0 and 40, and exam must be between 0 and 60.");
+return;
+}
+
+const admission = studentSelect.value;
+const studentName = selectedStudent.dataset.name;
+const total = ca + exam;
+const grade = getGrade(total);
+
+const existingIndex = results.findIndex(r =>
+String(r.admission) === String(admission) &&
+normalize(r.className) === normalize(className) &&
+normalize(r.subject) === normalize(subject)
+);
+
+const record = {
+name: studentName,
+admission: admission,
+className: className,
+subject: subject,
+ca: ca,
+exam: exam,
+total: total,
+grade: grade
+};
+
+if (existingIndex >= 0) {
+results[existingIndex] = record;
+} else {
+results.push(record);
+}
+
+localStorage.setItem("goshenResults", JSON.stringify(results));
+
+document.getElementById("message").textContent =
+"Result saved successfully!";
+
+document.getElementById("subject").value = "";
+document.getElementById("ca").value = "";
+document.getElementById("exam").value = "";
+
+displayResults();
+}
+
+function displayResults() {
+const selectedFilter = filterClass.value;
+const table = document.getElementById("resultsTable");
+
+table.innerHTML = "";
+
+const filtered = results.filter(r =>
+!selectedFilter ||
+normalize(r.className) === normalize(selectedFilter)
+);
+
+if (filtered.length === 0) {
+table.innerHTML = '<tr><td colspan="8">No results saved yet.</td></tr>';
+return;
+}
+
+filtered.forEach((result, index) => {
+const row = document.createElement("tr");
+
+[
+result.name,
+result.className,
+result.subject,
+result.ca,
+result.exam,
+result.total,
+result.grade
+].forEach(value => {
+const cell = document.createElement("td");
+cell.textContent = value;
+row.appendChild(cell);
+});
+
+const actionCell = document.createElement("td");
+const deleteButton = document.createElement("button");
+deleteButton.textContent = "Delete";
+deleteButton.className = "delete";
+deleteButton.onclick = () => deleteResult(results.indexOf(result));
+
+actionCell.appendChild(deleteButton);
+row.appendChild(actionCell);
+table.appendChild(row);
+});
+}
+
+function deleteResult(index) {
+if (!confirm("Are you sure you want to delete this result?")) return;
+
+results.splice(index, 1);
+localStorage.setItem("goshenResults", JSON.stringify(results));
+displayResults();
+}
+
+classSelect.addEventListener("change", loadStudents);
+
+loadClasses();
+displayResults();
+</script>
+
+</body>
+  </html>
